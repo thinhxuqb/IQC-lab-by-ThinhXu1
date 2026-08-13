@@ -1,10 +1,103 @@
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
+name: Build Windows App (.exe)
 
+
+
+on:
+
+  push:
+  
+    branches: [ main, master ]
+    
+  pull_request:
+  
+    branches: [ main, master ]
+    
+
+
+jobs:
+
+  build:
+  
+    runs-on: windows-latest
+    
+    steps:
+    
+      - name: Checkout repository
+      
+        uses: actions/checkout@v4
+        
+
+
+      - name: Setup Node.js
+      
+        uses: actions/setup-node@v4
+        
+        with:
+        
+          node-version: 22
+          
+
+
+      - name: Install pnpm
+      
+        uses: pnpm/action-setup@v4
+        
+        with:
+        
+          version: 10
+          
+          run_install: false
+          
+
+
+      - name: Get pnpm store directory
+      
+        shell: pwsh
+        
+        run: |
+        
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $env:GITHUB_ENV
+          
+
+
+      - name: Setup pnpm cache
+      
+        uses: actions/cache@v4
+        
+        with:
+        
+          path: ${{ env.STORE_PATH }}
+          
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          
+          restore-keys: |
+          
+            ${{ runner.os }}-pnpm-store-
+            
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
 
       - name: Expand source archive
         shell: pwsh
@@ -14,47 +107,32 @@
             Remove-Item "iqc-lab-source.zip" -Force
           }
 
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
 
       - name: Build and Package Windows Installer and Portable Executable
         run: pnpm build && pnpm exec electron-builder --win --x64 --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
-
       - name: Create Portable ZIP
         shell: pwsh
         run: |
-          $portable = Get-ChildItem -Path "release" -Filter "*.exe" |
-            Where-Object { $_.Name -notmatch "Setup" } |
-            Select-Object -First 1
-          if ($null -eq $portable) {
-            throw "Portable executable was not created in release/."
-          }
+          $portable = Get-ChildItem -Path "release" -Filter "*.exe" | Where-Object { $_.Name -notmatch "Setup" } | Select-Object -First 1
+          if ($null -eq $portable) { throw "Portable executable was not created in release/." }
           $portableZip = "release/IQC-Lab-by-ThinhXu-Portable-1.0.0.zip"
           Compress-Archive -LiteralPath $portable.FullName -DestinationPath $portableZip -Force
           Write-Host "Created $portableZip from $($portable.Name)"
-
 
       - name: Verify Windows artifacts
         shell: pwsh
         run: |
           $exeFiles = @(Get-ChildItem -Path "release" -Filter "*.exe")
           $zipFiles = @(Get-ChildItem -Path "release" -Filter "*.zip")
-          if ($exeFiles.Count -lt 2) {
-            throw "Expected installer and portable executables in release/."
-          }
-          if ($zipFiles.Count -lt 1) {
-            throw "Expected at least one Portable ZIP in release/."
-          }
-          Write-Host "EXE artifacts:"
+          if ($exeFiles.Count -lt 2) { throw "Expected installer and portable executables in release/." }
+          if ($zipFiles.Count -lt 1) { throw "Expected at least one Portable ZIP in release/." }
           $exeFiles | Select-Object Name, Length | Format-Table
-          Write-Host "ZIP artifacts:"
           $zipFiles | Select-Object Name, Length | Format-Table
-
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
@@ -63,13 +141,4 @@
           path: |
             release/*.exe
             release/*.zip
-
-
-      - name: Upload build summary
-        shell: pwsh
-        run: |
-          "### Windows artifacts" >> $env:GITHUB_STEP_SUMMARY
-          Get-ChildItem -Path "release" -Include "*.exe", "*.zip" -File |
-            Select-Object Name, Length |
-            Format-Table -AutoSize | Out-String >> $env:GITHUB_STEP_SUMMARY
-
+          if-no-files-found: error
