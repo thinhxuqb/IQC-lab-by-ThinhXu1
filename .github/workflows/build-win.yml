@@ -1,63 +1,211 @@
 name: Build Windows App (.exe)
 
+
+
 on:
+
   push:
-    branches: [ main, master ]
+  
+    branches: [main, master]
+    
   pull_request:
-    branches: [ main, master ]
+  
+    branches: [main, master]
+    
+
 
 jobs:
-  build:
-    runs-on: windows-latest
 
+  build:
+  
+    runs-on: windows-latest
+    
     steps:
+    
       - name: Checkout repository
+      
         uses: actions/checkout@v4
+        
+
 
       - name: Setup Node.js
+      
         uses: actions/setup-node@v4
+        
         with:
+        
           node-version: 22
+          
+
 
       - name: Install pnpm
+      
         uses: pnpm/action-setup@v4
+        
         with:
+        
           version: 10
+          
           run_install: false
+          
+
 
       - name: Get pnpm store directory
+      
         shell: pwsh
+        
         run: |
+        
           echo "STORE_PATH=$(pnpm store path --silent)" >> $env:GITHUB_ENV
+          
+
 
       - name: Setup pnpm cache
+      
         uses: actions/cache@v4
+        
         with:
+        
           path: ${{ env.STORE_PATH }}
+          
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          
           restore-keys: |
+          
             ${{ runner.os }}-pnpm-store-
+            
+
 
       - name: Expand source archive
+      
         shell: pwsh
+        
         run: |
-           if (Test-Path "iqc-lab-source.zip") {
+        
+          if (Test-Path "iqc-lab-source.zip") {
+          
             Expand-Archive -Path "iqc-lab-source.zip" -DestinationPath "." -Force
+            
             Remove-Item "iqc-lab-source.zip" -Force
-           }
+            
+          }
+          
+
 
       - name: Install dependencies
+      
         run: pnpm install --frozen-lockfile
+        
+
 
       - name: Build and Package Windows Installer (.exe) and Portable (.zip)
-        run: pnpm build && pn`m exec electron-builder --wIn --x64 --publish never
+      
+        shell: pwsh
+        
+        run: |
+        
+          pnpm build
+          
+          pnpm exec electron-builder --win --x64 --publish never
+          
         env:
+        
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          
+
+
+      - name: Verify Windows artifacts
+      
+        shell: pwsh
+        
+        run: |
+        
+          $files = Get-ChildItem -Path "release" -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -in ".exe", ".zip" }
+          
+          if (-not $files) {
+          
+            Write-Error "No .exe or .zip files were produced in release/"
+            
+          }
+          
+          $files | Format-Table Name, Length
+          
+
 
       - name: Upload Windows artifacts
+      
         uses: actions/upload-artifact@v4
+        
         with:
+        
           name: iqc-lab-windows-build
+          
           path: |
+          
             release/*.exe
+            
             release/*.zip
+            
+          if-no-files-found: error
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
